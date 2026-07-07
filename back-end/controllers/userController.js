@@ -1,109 +1,128 @@
 import bcrypt from "bcrypt";
 import userModel from "../models/userModel.js";
-import jwt from "jsonwebtoken";
-import { getJwtConfig } from "../config/jwt.js";
+import {
+  idValidator,
+  validateRequiredFields,
+} from "../validators/userValidators.js";
+
+import { generateToken } from "../utils/tokenGenerator.js";
 
 const createUser = async (req, res) => {
-  const { name, email, password } = req.body;
+  try {
+    const { name, email, password } = req.body;
+    validateRequiredFields({name, email, password});
 
-  const hashPassword = await bcrypt.hash(password, 10);
-  const creation_date = new Date().toISOString();
+    const hashPassword = await bcrypt.hash(password, 10);
+    const creation_date = new Date().toISOString();
 
-  userModel.create(name, email, hashPassword, creation_date, (err, id) => {
-    if (err) {
-      return res.status(500).json({
-        erro: err.message,
+    userModel.create(name, email, hashPassword, creation_date, (err, id) => {
+      if (err) {
+        return res.status(500).json({
+          erro: err.message,
+        });
+      }
+
+      res.status(201).json({
+        mensagem: "Usuário criado com sucesso",
+        id,
       });
-    }
-
-    res.status(201).json({
-      mensagem: "Usuário criado com sucesso",
-      id,
     });
-  });
+  } catch (error) {
+    return res.status(400).json({
+      mensagem: error.message,
+    });
+  }
 };
 
 const getUserById = (req, res) => {
-  const id = Number(req.params.id);
+  try {
+    const id = Number(req.params.id);
+    idValidator(id);
 
-  userModel.findById(id, (err, user) => {
-    if (err) {
-      return res.status(500).json({
-        erro: err.message,
-      });
-    }
+    userModel.findById(id, (err, user) => {
+      if (err) {
+        return res.status(500).json({
+          erro: err.message,
+        });
+      }
 
-    if (!user) {
-      return res.status(404).json({
-        mensagem: "Usuário não encontrado",
-      });
-    }
-    res.json(user);
-  });
+      if (!user) {
+        return res.status(404).json({
+          mensagem: "Usuário não encontrado",
+        });
+      }
+      res.json(user);
+    });
+  } catch (error) {
+    return res.status(400).json({
+      mensagem: error.message,
+    });
+  }
 };
 
 const loginByEmail = (req, res) => {
-  const { email, password } = req.body;
+  try {
+    const { email, password } = req.body;
+    validateRequiredFields({email, password});
 
-  userModel.findByEmail(email, (err, user) => {
-    if (err) {
-      return res.status(500).json({
-        erro: err.message,
+    userModel.findByEmail(email, (err, user) => {
+      if (err) {
+        return res.status(500).json({
+          erro: err.message,
+        });
+      }
+      if (!user) {
+        return res.status(404).json({
+          mensagem: "Usuário não encontrado",
+        });
+      }
+
+      const passwordMatch = bcrypt.compareSync(password, user.password);
+      if (!passwordMatch) {
+        return res.status(401).json({
+          mensagem: "Senha incorreta",
+        });
+      }
+
+      const token = generateToken(user);
+
+      return res.json({
+        mensagem: "Login realizado com sucesso",
+        token,
       });
-    }
-
-    if (!user) {
-      return res.status(404).json({
-        mensagem: "Usuário não encontrado",
-      });
-    }
-
-    const passwordMatch = bcrypt.compareSync(password, user.password);
-
-    if (!passwordMatch) {
-      return res.status(401).json({
-        mensagem: "Senha incorreta",
-      });
-    }
-
-    const { secret, expiresIn } = getJwtConfig();
-
-    const token = jwt.sign(
-      {
-        id: user.id,
-        email: user.email,
-      },
-      secret,
-      {
-        expiresIn: expiresIn,
-      },
-    );
-
-    return res.json({
-      mensagem: "Login realizado com sucesso",
-      token,
     });
-  });
+  } catch (error) {
+    return res.status(400).json({
+      mensagem: error.message,
+    });
+  }
 };
 
 const getProfile = (req, res) => {
-  const id = req.user.id;
+  try {
+    const id = Number(req.user.id);
+    idValidator(id);
 
-  userModel.findById(id, (err, user) => {
-    if (err) {
-      return res.status(500).json({
-        erro: err.message,
-      });
-    }
+    userModel.findById(id, (err, user) => {
+      if (err) {
+        return res.status(500).json({
+          erro: err.message,
+        });
+      }
 
-    if (!user) {
-      return res.status(404).json({
-        mensagem: "Usuário não encontrado",
-      });
-    }
+      if (!user) {
+        return res.status(404).json({
+          mensagem: "Usuário não encontrado",
+        });
+      }
 
-    res.json(user);
-  });
+      res.json(user);
+    });
+  } catch (error) {
+    return res.status(400).json({
+      mensagem: error.message,
+    });
+  }
 };
 
 export { createUser, getUserById, loginByEmail, getProfile };
